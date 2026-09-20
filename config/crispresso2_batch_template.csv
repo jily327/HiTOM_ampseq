@@ -1,0 +1,2 @@
+name,fastq_r1,fastq_r2,amplicon_seq,expected_hdr_amplicon_seq,guide_seq,target_name,sample_id,editor,dpi,_NOTE
+EXAMPLE_ePPEmax_ALSW_6dpi__ALSW,/path/to/ePPEmax_ALSW_6dpi_pool_R1.fastq.gz,/path/to/ePPEmax_ALSW_6dpi_pool_R2.fastq.gz,FILL_IN_AMPLICON_SEQUENCE,FILL_IN_EDITED_AMPLICON_SEQUENCE,,ALSW,ePPEmax_ALSW_6dpi_pool,ePPEmax,6,Template row — replace paths and sequences
