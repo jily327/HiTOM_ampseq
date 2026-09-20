@@ -1,0 +1,53 @@
+{
+  "_comment": "Qi-lab Hi-TOM protocol constants. These are fixed by the HiTOM library design and do not change between runs. Source: Qi-lab standard operating procedure.",
+
+  "forward_bridge": "ggagtgagtacggtgtgc",
+  "reverse_bridge": "gagttggatgctggatgg",
+
+  "forward_primer_structure": "gctt + 4bp_F_barcode + t + [amplicon_forward_primer]",
+  "reverse_primer_structure": "ctgt + 4bp_R_barcode + t + [amplicon_reverse_primer]",
+
+  "tail_bridges": {
+    "_comment": "Sequences clipped from the 3-prime end of reads when the amplicon is short enough that the read runs through to the other bridge. r1_tail_bridge = RC(reverse_bridge); r2_tail_bridge = RC(forward_bridge).",
+    "r1_tail_bridge": "CCATCCAGCATCCAACTC",
+    "r2_tail_bridge": "GCACACCGTACTCACTCC"
+  },
+
+  "forward_barcodes": {
+    "_comment": "Standard Qi-lab Hi-TOM 12-plex forward barcodes (F1-F12). Sequences are 4 bp.",
+    "F1":  "GCGT",
+    "F2":  "GTAG",
+    "F3":  "ACGC",
+    "F4":  "CTCG",
+    "F5":  "GCTC",
+    "F6":  "AGTC",
+    "F7":  "CGAC",
+    "F8":  "GATG",
+    "F9":  "ATAC",
+    "F10": "CACA",
+    "F11": "GTGC",
+    "F12": "ACTA"
+  },
+
+  "reverse_barcodes": {
+    "_comment": "Standard Qi-lab Hi-TOM 8-plex reverse barcodes (R-A through R-H). Sequences are 4 bp.",
+    "R-A": "GCGT",
+    "R-B": "GTAG",
+    "R-C": "ACGC",
+    "R-D": "CTCG",
+    "R-E": "GCTC",
+    "R-F": "AGTC",
+    "R-G": "CGAC",
+    "R-H": "GATG"
+  },
+
+  "defaults": {
+    "_comment": "Default barcode extraction and trimming positions. Based on the Hi-TOM primer structure: 4 random bases + 4 bp barcode at positions 4:8. The 27-bp leader (4 random + 4 barcode + ~19 bp bridge/primer) is trimmed from both R1 and R2.",
+    "r1_bc_start":    4,
+    "r1_bc_end":      8,
+    "r2_bc_start":    4,
+    "r2_bc_end":      8,
+    "trim_start_r1":  27,
+    "trim_start_r2":  27
+  }
+}

@@ -1,0 +1,206 @@
+{
+  "_comment": "Motif definitions for the ALSW/ALSP/EPSPS prime-editing amplicon-seq experiment. All motif sequences and allele logic are validated against the gold-standard motif_count_summary.tsv produced on 2026-06-01/02. Do NOT modify motif sequences without re-validating.",
+
+  "targets": [
+    {
+      "name":             "ALSP_core",
+      "applicable_to":    ["ALSP"],
+      "wt_motif":         "GGTCAAGTGCCACGT",
+      "desired_motif":    "GGTCAAGTGTCACGT",
+      "allele":           null,
+      "category":         "edit_classification",
+      "note":             "Core edit site motif, does not discriminate between chr01 and chr11 alleles. Validated.",
+
+      "_alignment_fields": "Fields below are used by 07_alignment_edit_classifier.py and 08_prepare_crispresso2_inputs.py. They are NOT used by the validated motif-count pipeline (scripts 01-06).",
+      "edit_positions_in_motif": [{"pos": 9, "wt_base": "C", "desired_base": "T"}],
+      "desired_edit_description": "C9T (C to T substitution at position 9 of the WT motif, 0-indexed)",
+      "reference_amplicon_sequence": null,
+      "_reference_amplicon_note": "UNKNOWN: full amplicon reference sequence not provided for this analysis. Alignment-based analysis will use the motif as a short reference. Provide the full amplicon sequence here to enable complete read alignment.",
+      "expected_edited_amplicon_sequence": null,
+      "guide_sequence": null,
+      "analysis_notes": "ALSP core motif. Does not discriminate alleles. Full amplicon reference unavailable."
+    },
+    {
+      "name":             "ALSP_chr01",
+      "applicable_to":    ["ALSP"],
+      "wt_motif":         "TTGTTGCTATAACTGGTCAAGTGCCACGT",
+      "desired_motif":    "TTGTTGCTATAACTGGTCAAGTGTCACGT",
+      "allele":           "chr01",
+      "category":         "allele_and_edit",
+      "allele_discriminating_snp": "TTGTTGCTATAACT (chr01-specific flanking sequence)",
+      "note":             "Allele-discriminating motif for ALSP chromosome 1 homeolog. Validated.",
+
+      "edit_positions_in_motif": [{"pos": 23, "wt_base": "C", "desired_base": "T"}],
+      "desired_edit_description": "C23T within the chr01-discriminating motif",
+      "reference_amplicon_sequence": null,
+      "_reference_amplicon_note": "UNKNOWN. Provide chr01-specific amplicon sequence to enable alignment.",
+      "expected_edited_amplicon_sequence": null,
+      "guide_sequence": null,
+      "analysis_notes": "chr01 allele. Allele discrimination via flanking SNP (TTGTTGCTATAACT)."
+    },
+    {
+      "name":             "ALSP_chr11",
+      "applicable_to":    ["ALSP"],
+      "wt_motif":         "TTGTTGCTATAACCGGTCAAGTGCCACGT",
+      "desired_motif":    "TTGTTGCTATAACCGGTCAAGTGTCACGT",
+      "allele":           "chr11",
+      "category":         "allele_and_edit",
+      "allele_discriminating_snp": "TTGTTGCTATAACCC (chr11-specific flanking sequence, C at the discriminating position)",
+      "note":             "Allele-discriminating motif for ALSP chromosome 11 homeolog. Validated.",
+
+      "edit_positions_in_motif": [{"pos": 23, "wt_base": "C", "desired_base": "T"}],
+      "desired_edit_description": "C23T within the chr11-discriminating motif",
+      "reference_amplicon_sequence": null,
+      "_reference_amplicon_note": "UNKNOWN. Provide chr11-specific amplicon sequence to enable alignment.",
+      "expected_edited_amplicon_sequence": null,
+      "guide_sequence": null,
+      "analysis_notes": "chr11 allele. Allele discrimination via flanking SNP (TTGTTGCTATAACCC)."
+    },
+    {
+      "name":             "ALSW",
+      "applicable_to":    ["ALSW"],
+      "wt_motif":         "GGTTCAATGGGAGGATCGGTTCTA",
+      "desired_motif":    "GGTTCAATTGGAGGATCGGTTCTA",
+      "allele":           null,
+      "category":         "edit_classification",
+      "note":             "ALSW single-allele motif pair. DO NOT split ALSW into alleles unless validated. Validated.",
+
+      "edit_positions_in_motif": [{"pos": 8, "wt_base": "G", "desired_base": "T"}],
+      "desired_edit_description": "G8T (G to T substitution at position 8 of the WT motif, 0-indexed)",
+      "reference_amplicon_sequence": null,
+      "_reference_amplicon_note": "UNKNOWN: full ALSW amplicon reference sequence not provided. Alignment-based analysis will use the 24bp WT motif as a short reference. This enables detection of indels within the motif window but not the full amplicon.",
+      "expected_edited_amplicon_sequence": null,
+      "guide_sequence": null,
+      "analysis_notes": "Primary target of this analysis. Single-allele. Full amplicon reference unavailable — alignment uses 24bp motif as reference."
+    },
+    {
+      "name":             "EPSPS_full",
+      "applicable_to":    ["EPSPS"],
+      "wt_motif":         "ACAGCAATGCGGCCA",
+      "desired_motif":    "ATAGCAATGCGGTCA",
+      "allele":           null,
+      "category":         "edit_classification",
+      "note":             "EPSPS full intended PE edit (both C→T changes). No full edits detected in the validated run. Validated.",
+
+      "edit_positions_in_motif": [
+        {"pos": 1,  "wt_base": "C", "desired_base": "T"},
+        {"pos": 12, "wt_base": "C", "desired_base": "T"}
+      ],
+      "desired_edit_description": "C1T + C12T (two substitutions required for full desired edit)",
+      "reference_amplicon_sequence": null,
+      "_reference_amplicon_note": "UNKNOWN. Provide full EPSPS amplicon sequence to enable alignment.",
+      "expected_edited_amplicon_sequence": null,
+      "guide_sequence": null,
+      "analysis_notes": "Dual-edit target. Full amplicon reference unavailable."
+    },
+    {
+      "name":             "EPSPS_partial1_front",
+      "applicable_to":    ["EPSPS"],
+      "wt_motif":         "ACAGCAATGCGGCCA",
+      "desired_motif":    "ATAGCAATGCGGCCA",
+      "allele":           null,
+      "category":         "partial_edit",
+      "note":             "EPSPS partial edit: front change only (C1T). Low-level signal only. Validated.",
+
+      "edit_positions_in_motif": [{"pos": 1, "wt_base": "C", "desired_base": "T"}],
+      "desired_edit_description": "C1T only (front half of full EPSPS edit)",
+      "reference_amplicon_sequence": null,
+      "_reference_amplicon_note": "UNKNOWN.",
+      "expected_edited_amplicon_sequence": null,
+      "guide_sequence": null,
+      "analysis_notes": "Partial edit detection."
+    },
+    {
+      "name":             "EPSPS_partial2_back",
+      "applicable_to":    ["EPSPS"],
+      "wt_motif":         "ACAGCAATGCGGCCA",
+      "desired_motif":    "ACAGCAATGCGGTCA",
+      "allele":           null,
+      "category":         "partial_edit",
+      "note":             "EPSPS partial edit: back change only (C12T). Low-level signal only. Validated.",
+
+      "edit_positions_in_motif": [{"pos": 12, "wt_base": "C", "desired_base": "T"}],
+      "desired_edit_description": "C12T only (back half of full EPSPS edit)",
+      "reference_amplicon_sequence": null,
+      "_reference_amplicon_note": "UNKNOWN.",
+      "expected_edited_amplicon_sequence": null,
+      "guide_sequence": null,
+      "analysis_notes": "Partial edit detection."
+    }
+  ],
+
+  "allele_aware_targets": [
+    {
+      "_comment": "allele_aware_targets are used ONLY by 11_allele_aware_precise_edit.py. They do NOT affect the validated motif-count pipeline (scripts 01-06). Backward-compatible addition.",
+
+      "target_name":    "ALSP",
+      "analysis_type":  "allele_aware_precise_edit",
+      "applicable_to":  ["ALSP"],
+      "status":         "configured",
+
+      "_how_it_works": "Search for allele_common_anchor in the read. Base immediately after the anchor is the allele-discriminating SNP. Base at snp_offset + edit_offset_from_snp is the edit site.",
+
+      "allele_common_anchor": "TTGTTGCTATAAC",
+      "_anchor_derivation": "Common prefix of ALSP_chr01 and ALSP_chr11 29bp motifs (positions 0-12). Position 13 is the allele-discriminating SNP.",
+
+      "alleles": {
+        "chr01": {
+          "reference_sequence": null,
+          "_reference_note": "Full chr01 amplicon sequence not available. SNP-based assignment only.",
+          "allele_snps": [
+            {
+              "snp_offset_from_anchor_end": 0,
+              "expected_base": "T",
+              "description": "chr01-specific T at position 13 of the 29bp allele motif (TTGTTGCTATAACT...)",
+              "validated": true,
+              "source": "Derived from ALSP_chr01 vs ALSP_chr11 motif comparison (validated motif-count analysis)"
+            }
+          ]
+        },
+        "chr11": {
+          "reference_sequence": null,
+          "_reference_note": "Full chr11 amplicon sequence not available. SNP-based assignment only.",
+          "allele_snps": [
+            {
+              "snp_offset_from_anchor_end": 0,
+              "expected_base": "C",
+              "description": "chr11-specific C at position 13 of the 29bp allele motif (TTGTTGCTATAACCC...)",
+              "validated": true,
+              "source": "Derived from ALSP_chr01 vs ALSP_chr11 motif comparison (validated motif-count analysis)"
+            }
+          ]
+        }
+      },
+
+      "edit": {
+        "name":                         "C_to_T_ALS_edit",
+        "offset_from_snp":              10,
+        "_offset_derivation":           "Edit at position 23 in 29bp motif; SNP at position 13; offset = 23 - 13 = 10",
+        "wt_base":                      "C",
+        "desired_base":                 "T",
+        "exclude_from_allele_assignment": true,
+        "notes": "The edit (C→T at pos 23) is 10 bp downstream of the allele-discriminating SNP (pos 13). It must not be used to assign allele identity."
+      },
+
+      "edit_window": {
+        "start": 20,
+        "end":   26,
+        "_note": "Conservative window around the edit site (pos 23 ± 3 bp). Positions within this window are excluded from allele assignment scoring as an additional safeguard."
+      },
+
+      "min_informative_snps": 1,
+      "notes": "ALSP (N. benthamiana ALS homeologs). Allele assignment uses single SNP at position 13 of the 29bp context motif. SNP coordinates derived from validated ALSP_chr01/chr11 motif comparison. Full amplicon reference sequences not available — SNP-only assignment mode."
+    },
+
+    {
+      "target_name":    "ALSW",
+      "analysis_type":  "allele_aware_precise_edit",
+      "applicable_to":  ["ALSW"],
+      "status":         "unconfigured",
+      "allele_common_anchor": null,
+      "alleles": {},
+      "edit": null,
+      "notes": "Allele-discriminating SNP positions for ALSW chr01/chr11 homeologs are not available for this analysis. Provide allele_common_anchor, allele_snps coordinates, and edit position to enable allele-aware mode for ALSW. Script 11 will skip this target gracefully."
+    }
+  ]
+}
