@@ -1,0 +1,9 @@
+# ALSW HiTOM Amplicon-seq Pipeline  —  Python dependencies
+#
+# Steps 01-05 (demux, QC, allele, edit classification, summary tables)
+# use Python standard library only and have NO external dependencies.
+#
+# Step 06 (figures) requires:
+matplotlib>=3.5
+pandas>=1.4
+numpy>=1.21

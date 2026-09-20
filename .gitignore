@@ -1,0 +1,31 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Sequencing data / large outputs (keep out of git)
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+*.bam
+*.bai
+*.sam
+*.fasta.fai
+*.zip
+*.tar.gz
+
+# Pipeline run outputs (outputs_example/ is kept as a small sample)
+outputs/
+results/
+work/
+CRISPResso_on_*/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
