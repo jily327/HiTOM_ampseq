@@ -937,7 +937,7 @@ def write_figure_legends(out_dir):
         lines.append("")
         lines.append(legend)
         lines.append("")
-    path.write_text("\n".join(lines))
+    path.write_text("\n".join(lines), encoding="utf-8")
     print(f"[06_figures] SAVED  figure_legends.md")
 
 

@@ -47,16 +47,40 @@ To enable full-amplicon alignment, add the complete amplicon sequence to
 | `imprecise_PE` | Partial desired change (some but not all edit positions changed) |
 | `indel` | Indel detected in motif window, no exact motif match |
 | `other_substitution` | Substitution not matching WT or desired at edit positions |
+| `other_allele` | Exact match to another homeolog's motif (e.g. a chr11 read scored against the chr01 target) |
 | `no_motif_align` | Alignment score below identity threshold |
 | `short_read` | Read too short for alignment (< --min-read-len, default 30 bp) |
 
-## Speed notes
+## Allele cross-talk
 
-- Smith-Waterman is O(n × m) per alignment, where n = read length (~100 bp),
-  m = motif length (~15–29 bp).
-- With `--max-reads 3000` (default), alignment runs in ~30–60 seconds per
-  sample for 18 samples.
-- Set `--max-reads 0` to process all reads (much slower).
+`ALSP_chr01` and `ALSP_chr11` differ by one base in their 29 bp motifs, and a
+sample carries reads from both homeologs. A chr11 read scored against the
+chr01 target matches neither of that target's motifs, so before this was
+handled it was aligned anyway and landed in `imprecise_PE`,
+`other_substitution` or `no_motif_align`, categories that read as editing
+outcomes. Such reads are now reported as `other_allele`.
+
+This does not change `alignment_precise_desired_pct`, which has always been
+`precise_desired / (wt + precise_desired)`; it only stops the other columns
+from being misread.
+
+## Read sampling and speed
+
+- Smith-Waterman is quadratic per alignment (read length x motif length), so
+  aligning a whole FASTQ is usually too slow.
+- `--max-reads` (default 3000) caps how many read pairs per sample and target
+  are classified. Step 04 always uses every read, so the two methods are only
+  comparable when that cap is not reached.
+- The subset is drawn at random from the whole file (`--sampling random`,
+  reservoir sampling seeded by `--seed`, default 0). The earlier behaviour
+  took the first N reads, which are ordered by flowcell position and are
+  therefore not a random sample of the library; `--sampling head` restores it.
+- Every row of `alignment_sample_summary.csv` records
+  `total_read_pairs_in_sample`, `total_reads_processed`,
+  `reads_classified_pct`, `sampling_strategy` and `sampling_seed`, so a
+  motif-vs-alignment difference can be told apart from a sampling difference.
+- `--max-reads 0` processes every read with no sampling (much slower).
+- With the default cap, alignment runs in roughly 30 to 60 seconds per sample.
 
 ## How to validate this output
 

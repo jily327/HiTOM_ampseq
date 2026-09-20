@@ -129,7 +129,7 @@ def main():
 
     print(f"[09_crispresso2] Command: {' '.join(cmd)}")
 
-    with open(log_path, "w") as log:
+    with open(log_path, "w", encoding=utils.TEXT_ENCODING) as log:
         log.write(f"Command: {' '.join(cmd)}\n\n")
         result = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT)
 

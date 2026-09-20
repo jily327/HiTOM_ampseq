@@ -15,6 +15,7 @@ Additional QC (new, not in validated motif-count path):
 Outputs (all under <output>/01_demux/):
   demux_trimmed/         per-sample FASTQs after barcode demux + 27-bp trim
   demux_clean/           per-sample FASTQs after additional tail-bridge clip
+                         (assigned samples only; no undetermined bin)
   demux_counts.tsv       read pairs per sample (including undetermined)
   tail_trim_summary.tsv  tail-bridge clip counts per sample
   barcode_assignment_summary.csv  overall assignment rate
@@ -141,11 +142,11 @@ def main():
     for fpath, fmd5 in [(r1_path, r1_md5), (r2_path, r2_md5)]:
         sidecar = Path(str(fpath) + ".md5")
         if sidecar.exists():
-            expected = sidecar.read_text().split()[0].strip()
+            expected = sidecar.read_text(encoding="utf-8").split()[0].strip()
             status = "MATCH" if fmd5 == expected else "MISMATCH"
             md5_lines.append(f"  {fpath.name}: {status}  expected={expected}")
             print(f"[01_demux]   {fpath.name}: {status}")
-    (out_dir / "md5_summary.txt").write_text("\n".join(md5_lines) + "\n")
+    (out_dir / "md5_summary.txt").write_text("\n".join(md5_lines) + "\n", encoding="utf-8")
 
     # -----------------------------------------------------------------------
     # PASS 1 — Demultiplex + 27-bp leader trim
@@ -158,14 +159,16 @@ def main():
 
     def get_trimmed_handles(sample):
         if sample not in handles_trimmed:
-            h1 = gzip.open(trimmed_dir / f"{sample}_R1.fastq.gz", "wt")
-            h2 = gzip.open(trimmed_dir / f"{sample}_R2.fastq.gz", "wt")
+            h1 = gzip.open(trimmed_dir / f"{sample}_R1.fastq.gz", "wt",
+                            encoding=utils.TEXT_ENCODING)
+            h2 = gzip.open(trimmed_dir / f"{sample}_R2.fastq.gz", "wt",
+                            encoding=utils.TEXT_ENCODING)
             handles_trimmed[sample] = (h1, h2)
         return handles_trimmed[sample]
 
     with utils.open_gz(r1_path) as f1, utils.open_gz(r2_path) as f2:
-        for (h1, s1, p1, q1), (h2, s2, p2, q2) in zip(
-                utils.fastq_iter(f1), utils.fastq_iter(f2)):
+        for (h1, s1, p1, q1), (h2, s2, p2, q2) in utils.fastq_pair_iter(
+                f1, f2, label=f"{r1_path.name} / {r2_path.name}"):
 
             fb = s1.upper()[r1_bc_start:r1_bc_end]
             rb = s2.upper()[r2_bc_start:r2_bc_end]
@@ -231,6 +234,11 @@ def main():
 
     for r1_trim in sorted(trimmed_dir.glob("*_R1.fastq.gz")):
         sid     = r1_trim.name.replace("_R1.fastq.gz", "")
+        # The undetermined bin is not used by any downstream step, so clipping
+        # it only costs time and disk.  The un-clipped reads are still kept in
+        # demux_trimmed/ for inspection.
+        if sid == "undetermined":
+            continue
         r2_trim = trimmed_dir / f"{sid}_R2.fastq.gz"
         if not r2_trim.exists():
             continue
@@ -241,10 +249,10 @@ def main():
         total = r1_clipped = r2_clipped = 0
 
         with utils.open_gz(r1_trim) as f1, utils.open_gz(r2_trim) as f2, \
-             gzip.open(out_r1, "wt") as o1, gzip.open(out_r2, "wt") as o2:
+             gzip.open(out_r1, "wt", encoding=utils.TEXT_ENCODING) as o1, gzip.open(out_r2, "wt", encoding=utils.TEXT_ENCODING) as o2:
 
-            for (h1, s1, p1, q1), (h2, s2, p2, q2) in zip(
-                    utils.fastq_iter(f1), utils.fastq_iter(f2)):
+            for (h1, s1, p1, q1), (h2, s2, p2, q2) in utils.fastq_pair_iter(
+                    f1, f2, label=f"{sid} (demux_trimmed)"):
 
                 idx1 = s1.upper().find(r1_tail_bridge)
                 if idx1 >= 0:

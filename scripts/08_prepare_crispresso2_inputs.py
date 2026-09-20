@@ -131,7 +131,8 @@ def main():
                "amplicon_seq", "expected_hdr_amplicon_seq", "guide_seq"]
     extra   = ["target_name", "sample_id", "editor", "dpi", "_NOTE"]
 
-    with open(out_dir / "CRISPRessoBatch_input.csv", "w", newline="") as f:
+    with open(out_dir / "CRISPRessoBatch_input.csv", "w", newline="",
+              encoding=utils.TEXT_ENCODING) as f:
         w = csv.DictWriter(f, fieldnames=c2_cols + extra)
         w.writeheader()
         w.writerows(batch_rows)
@@ -174,7 +175,7 @@ def main():
         "and interpretation.",
     ]
 
-    (out_dir / "README_crispresso2_inputs.md").write_text("\n".join(readme_lines))
+    (out_dir / "README_crispresso2_inputs.md").write_text("\n".join(readme_lines), encoding="utf-8")
 
     print(f"[08_crispresso2] Wrote {len(batch_rows)} batch rows "
           f"to CRISPRessoBatch_input.csv")

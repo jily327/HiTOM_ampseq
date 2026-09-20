@@ -122,9 +122,23 @@ echo "  Protocol consts  : $PROTOCOL"
 echo "  Started          : $(date '+%Y-%m-%d %H:%M:%S')"
 echo "======================================================================"
 
-PYTHON=$(command -v python3 || command -v python)
-if [[ -z "$PYTHON" ]]; then
-    echo "ERROR: python3 not found in PATH."
+# Pick an interpreter that actually runs.  `command -v python3` is not enough:
+# on Windows it commonly resolves to the Microsoft Store stub, which prints
+# "Python" and exits non-zero.  Each candidate is therefore executed once.
+# Set PYTHON=/path/to/python beforehand to skip the search.
+if [[ -z "${PYTHON:-}" ]]; then
+    for _cand in python3 python python3.exe python.exe; do
+        _path=$(command -v "$_cand" 2>/dev/null) || continue
+        if "$_path" -c 'import sys; assert sys.version_info[:2] >= (3, 8)'                 >/dev/null 2>&1; then
+            PYTHON="$_path"
+            break
+        fi
+    done
+fi
+if [[ -z "${PYTHON:-}" ]]; then
+    echo "ERROR: no working Python 3.8+ interpreter found in PATH."
+    echo "       Tried: python3, python (and .exe variants on Windows)."
+    echo "       Set PYTHON=/path/to/python to choose one explicitly."
     exit 1
 fi
 echo "  Python           : $($PYTHON --version 2>&1)"
@@ -222,10 +236,8 @@ if [[ "$RUN_CRISPRESSO2" == "true" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Optional Step 10  Motif vs alignment comparison (runs if both 04 + 07 done)
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
 # Optional Step 11  Allele-aware precise edit quantification
+# Runs before step 10 so that step 06 sees every optional result at once.
 # ---------------------------------------------------------------------------
 if [[ "$RUN_ALLELE_AWARE" == "true" ]]; then
     echo "--- Step 11: Allele-aware precise edit quantification (OPTIONAL) ---"
@@ -238,6 +250,9 @@ if [[ "$RUN_ALLELE_AWARE" == "true" ]]; then
     echo ""
 fi
 
+# ---------------------------------------------------------------------------
+# Optional Step 10  Motif vs alignment comparison (needs both 04 and 07)
+# ---------------------------------------------------------------------------
 if [[ "$RUN_ALIGNMENT" == "true" ]]; then
     echo "--- Step 10: Motif vs alignment comparison (OPTIONAL) ---"
     "$PYTHON" "$SCRIPTS_DIR/10_compare_motif_vs_alignment.py" \

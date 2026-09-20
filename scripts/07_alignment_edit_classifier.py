@@ -30,8 +30,21 @@ Classification categories:
   indel            Indel detected in motif window, no exact motif match
   desired_plus_indel  Desired motif match AND indel detected in alignment
   other_substitution  Aligned to WT with substitution(s) but not the desired change
+  other_allele     Exact match to a different allele's motif of the same
+                   gene (e.g. a chr11 read scored against the chr01 target).
+                   Reported separately so that it is not mistaken for an
+                   imprecise edit or a failed alignment.
   no_motif_align   No alignment to either motif (score below threshold)
   short_read       Read too short for reliable alignment (< --min-read-len)
+
+READ SAMPLING:
+  --max-reads limits how many read pairs per sample/target are aligned
+  (Smith-Waterman in pure Python is slow).  The subset is drawn at random
+  from the whole FASTQ by default (--sampling random, reservoir sampling with
+  --seed), not taken from the head of the file, so it is not biased by read
+  order on the flowcell.  --sampling head restores the previous first-N
+  behaviour.  Every summary row records the full read count of the sample,
+  how many reads were classified, and the strategy and seed used.
 
 Outputs (under <output>/07_alignment/):
   alignment_read_classifications.tsv
@@ -43,6 +56,7 @@ Outputs (under <output>/07_alignment/):
 
 import argparse
 import csv
+import random
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -60,6 +74,8 @@ MISMATCH = -1
 GAP      = -2
 MIN_IDENTITY_DEFAULT = 0.70   # minimum alignment identity to call a classification
 MAX_READS_DEFAULT    = 3000   # reads per sample (per target) for speed; 0 = all
+SAMPLING_DEFAULT     = "random"  # how the --max-reads subset is drawn
+SEED_DEFAULT         = 0         # RNG seed, so a run is reproducible
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +158,32 @@ def find_edit_positions(wt_motif: str, desired_motif: str):
     ]
 
 
+def sibling_allele_motifs(target: dict, all_targets: list):
+    """
+    Return [(allele_name, motif_seq), ...] for the OTHER alleles of the same
+    gene, so that reads coming from the wrong homeolog can be labelled
+    'other_allele' instead of being scored against this allele's motifs.
+
+    A sibling is a target that covers the same gene(s) (identical
+    applicable_to set) and carries a different, non-null allele name.
+    Returns an empty list for allele-agnostic targets.
+    """
+    if not target.get("allele"):
+        return []
+    app = {a.upper() for a in target["applicable_to"]}
+    out = []
+    for other in all_targets:
+        if other is target or not other.get("allele"):
+            continue
+        if other["allele"] == target["allele"]:
+            continue
+        if {a.upper() for a in other["applicable_to"]} != app:
+            continue
+        out.append((other["allele"], other["wt_motif"].upper()))
+        out.append((other["allele"], other["desired_motif"].upper()))
+    return out
+
+
 def detect_indels_in_alignment(aligned_q: str, aligned_r: str):
     """
     Scan a pairwise alignment for insertion and deletion events.
@@ -195,9 +237,14 @@ def classify_read(s1: str, s2: str,
                   wt_motif: str, desired_motif: str,
                   edit_positions: list,
                   min_identity: float = MIN_IDENTITY_DEFAULT,
-                  min_read_len: int = 30):
+                  min_read_len: int = 30,
+                  other_allele_motifs=()):
     """
     Classify one read pair (s1=R1, s2=R2) against WT and desired motifs.
+
+    other_allele_motifs: [(allele_name, motif_seq), ...] from the other
+    homeolog(s) of the same gene.  A read that matches one of them exactly,
+    and neither of this target's own motifs, is reported as 'other_allele'.
 
     Returns: dict with classification fields.
     """
@@ -245,6 +292,24 @@ def classify_read(s1: str, s2: str,
                 "has_mismatch": False,
                 "indel_size": total_indel_size,
                 "indel_near_edit_window": has_indel}
+
+    if not exact_wt and not exact_desired:
+        # The read may simply belong to the other homeolog.  Without this
+        # check such reads are aligned against this allele's motifs and land
+        # in imprecise_PE / other_substitution / no_motif_align, which reads
+        # as an editing outcome when it is only allele cross-talk.
+        for allele_name, other_motif in other_allele_motifs:
+            if utils.motif_hit(combined, other_motif, max_mismatches=0):
+                return {"classification": "other_allele",
+                        "best_reference": f"{allele_name}_motif",
+                        "alignment_score": len(other_motif) * MATCH,
+                        "alignment_identity": 1.0,
+                        "has_desired_edit": False,
+                        "has_indel": False,
+                        "has_mismatch": False,
+                        "indel_size": 0,
+                        "indel_near_edit_window": False,
+                        "other_allele_match": allele_name}
 
     if exact_wt and exact_desired:
         return {"classification": "precise_desired",
@@ -345,6 +410,40 @@ def classify_read(s1: str, s2: str,
 
 
 # ---------------------------------------------------------------------------
+# Read selection
+# ---------------------------------------------------------------------------
+
+def stream_read_pairs(r1_path, r2_path, label=""):
+    """Yield (read_id, s1, s2) for every pair in a demuxed FASTQ pair."""
+    with utils.open_gz(r1_path) as f1, utils.open_gz(r2_path) as f2:
+        for (hd1, s1, _, _), (_, s2, _, _) in utils.fastq_pair_iter(f1, f2, label):
+            yield hd1.lstrip("@").split()[0], s1, s2
+
+
+def select_read_pairs(r1_path, r2_path, max_reads, strategy, rng, label=""):
+    """
+    Return (selected_pairs, total_pairs_in_sample).
+
+    strategy 'random' draws an unbiased subset of size max_reads from the
+    whole file by reservoir sampling; 'head' keeps the first max_reads pairs.
+    Either way the file is read to the end so that the reported total read
+    count is the real one, not just the number that happened to be scored.
+    Memory is bounded by max_reads, not by the size of the FASTQ.
+    """
+    selected = []
+    total = 0
+    for rec in stream_read_pairs(r1_path, r2_path, label):
+        total += 1
+        if len(selected) < max_reads:
+            selected.append(rec)
+        elif strategy == "random":
+            j = rng.randrange(total)
+            if j < max_reads:
+                selected[j] = rec
+    return selected, total
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -370,6 +469,13 @@ def parse_args():
     p.add_argument("--max-reads", type=int, default=MAX_READS_DEFAULT, dest="max_reads",
                    help="Max read pairs per sample per target (0=all) "
                         f"[default: {MAX_READS_DEFAULT}]")
+    p.add_argument("--sampling", choices=["random", "head"], default=SAMPLING_DEFAULT,
+                   help="How the --max-reads subset is drawn: 'random' "
+                        "(reservoir sampling over the whole file, unbiased) or "
+                        "'head' (first N reads, biased by read order) "
+                        f"[default: {SAMPLING_DEFAULT}]")
+    p.add_argument("--seed", type=int, default=SEED_DEFAULT,
+                   help=f"RNG seed for --sampling random [default: {SEED_DEFAULT}]")
     p.add_argument("--window-start", type=int, default=None, dest="window_start",
                    help="Override edit window start (0-indexed, default: from targets.json)")
     p.add_argument("--window-end",   type=int, default=None, dest="window_end",
@@ -407,11 +513,27 @@ def main():
     print(f"[07_align] NOTE: alignment uses short WT/desired motifs as reference.")
     print(f"[07_align]       Full amplicon alignment requires reference_amplicon_sequence.")
     print(f"[07_align] Targets: {[t['name'] for t in targets_cfg]}")
-    print(f"[07_align] Max reads per sample/target: "
-          f"{'all' if args.max_reads == 0 else args.max_reads}")
+    if args.max_reads == 0:
+        sampling_label = "all"
+        print(f"[07_align] Max reads per sample/target: all")
+    else:
+        sampling_label = args.sampling
+        print(f"[07_align] Max reads per sample/target: {args.max_reads} "
+              f"({args.sampling} sampling, seed={args.seed})")
+        if args.sampling == "head":
+            print(f"[07_align] WARNING: --sampling head takes the first "
+                  f"{args.max_reads} reads of each file. That subset is "
+                  f"ordered by flowcell position, so it is not a random "
+                  f"sample of the library.")
+    rng = random.Random(args.seed)
+
+    # Sibling allele motifs are resolved from the FULL target list, so that
+    # --target still knows about the other homeolog.
+    all_targets = utils.load_targets(args.config)["targets"]
 
     read_class_rows       = []
     sample_summary        = defaultdict(lambda: defaultdict(int))
+    sample_reads          = {}   # (target, sample) → read pairs in the FASTQ
     indel_rows            = []
     mutation_spectrum     = []
 
@@ -421,6 +543,11 @@ def main():
         desired_motif = target["desired_motif"].upper()
         applicable    = [a.upper() for a in target["applicable_to"]]
         edit_pos      = find_edit_positions(wt_motif, desired_motif)
+        other_motifs  = sibling_allele_motifs(target, all_targets)
+        if other_motifs:
+            print(f"[07_align] {tname}: reads matching "
+                  f"{sorted({a for a, _ in other_motifs})} motifs will be "
+                  f"reported as 'other_allele'")
 
         # Warn if using motif as short reference
         if target.get("reference_amplicon_sequence") is None:
@@ -437,57 +564,64 @@ def main():
             if not r1.exists():
                 continue
 
-            n_read = n_short = n_processed = 0
-            with utils.open_gz(r1) as f1, utils.open_gz(r2) as f2:
-                for (hd1, s1, _, _), (hd2, s2, _, _) in zip(
-                        utils.fastq_iter(f1), utils.fastq_iter(f2)):
-                    n_read += 1
-                    if args.max_reads > 0 and n_processed >= args.max_reads:
-                        break
+            label = f"{tname} / {sid}"
+            if args.max_reads > 0:
+                pairs, n_read = select_read_pairs(
+                    r1, r2, args.max_reads, args.sampling, rng, label)
+            else:
+                pairs, n_read = stream_read_pairs(r1, r2, label), None
 
-                    result = classify_read(
-                        s1, s2, wt_motif, desired_motif,
-                        edit_pos, args.min_identity, args.min_read_len,
-                    )
-                    clss   = result["classification"]
-                    sample_summary[(tname, sid)][clss] += 1
+            n_short = n_processed = 0
+            for read_id, s1, s2 in pairs:
+                result = classify_read(
+                    s1, s2, wt_motif, desired_motif,
+                    edit_pos, args.min_identity, args.min_read_len,
+                    other_allele_motifs=other_motifs,
+                )
+                clss   = result["classification"]
+                sample_summary[(tname, sid)][clss] += 1
 
-                    if clss == "short_read":
-                        n_short += 1
-                    n_processed += 1
+                if clss == "short_read":
+                    n_short += 1
+                n_processed += 1
 
-                    read_class_rows.append({
-                        "target":                   tname,
-                        "sample_id":                sid,
-                        "read_id":                  hd1.lstrip("@").split()[0],
-                        "classification":           clss,
-                        "best_reference":           result["best_reference"],
-                        "alignment_score":          result["alignment_score"],
-                        "alignment_identity":       result["alignment_identity"],
-                        "has_desired_edit":         result["has_desired_edit"],
-                        "has_indel":                result["has_indel"],
-                        "indel_size":               result["indel_size"],
-                        "indel_near_edit_window":   result["indel_near_edit_window"],
+                read_class_rows.append({
+                    "target":                   tname,
+                    "sample_id":                sid,
+                    "read_id":                  read_id,
+                    "classification":           clss,
+                    "best_reference":           result["best_reference"],
+                    "alignment_score":          result["alignment_score"],
+                    "alignment_identity":       result["alignment_identity"],
+                    "has_desired_edit":         result["has_desired_edit"],
+                    "has_indel":                result["has_indel"],
+                    "indel_size":               result["indel_size"],
+                    "indel_near_edit_window":   result["indel_near_edit_window"],
+                    "other_allele_match":       result.get("other_allele_match", ""),
+                })
+
+                if result["has_indel"] and clss != "short_read":
+                    indel_rows.append({
+                        "target":        tname,
+                        "sample_id":     sid,
+                        "read_id":       read_id,
+                        "classification": clss,
+                        "indel_size":    result["indel_size"],
+                        "near_edit":     result["indel_near_edit_window"],
                     })
 
-                    if result["has_indel"] and clss != "short_read":
-                        indel_rows.append({
-                            "target":        tname,
-                            "sample_id":     sid,
-                            "read_id":       hd1.lstrip("@").split()[0],
-                            "classification": clss,
-                            "indel_size":    result["indel_size"],
-                            "near_edit":     result["indel_near_edit_window"],
-                        })
+            if n_read is None:          # streamed every read
+                n_read = n_processed
+            sample_reads[(tname, sid)] = n_read
 
-            print(f"[07_align]   {tname} / {sid}: {n_read} reads, "
-                  f"{n_processed} processed ({n_short} short)")
+            print(f"[07_align]   {tname} / {sid}: {n_read} reads in sample, "
+                  f"{n_processed} classified ({n_short} short)")
 
     # -----------------------------------------------------------------------
     # Build sample summary
     # -----------------------------------------------------------------------
     CATS = ["wt", "precise_desired", "imprecise_PE", "indel",
-            "desired_plus_indel", "other_substitution",
+            "desired_plus_indel", "other_substitution", "other_allele",
             "no_motif_align", "short_read"]
 
     sample_summary_rows = []
@@ -497,12 +631,24 @@ def main():
         informative = counts["wt"] + counts["precise_desired"]
         prec_pct  = (counts["precise_desired"] / informative * 100
                      if informative > 0 else 0.0)
+        in_sample = sample_reads.get((tname, sid), total)
+        frac      = (total / in_sample * 100) if in_sample else 0.0
         row = {
             "target":   tname,
             "sample_id": sid,
             "editor":   m.get("editor", ""),
             "dpi":      m.get("dpi", ""),
             "total_reads_processed": total,
+            # Read accounting: how many reads the sample actually has, how many
+            # of them were classified here, and how the subset was drawn.  The
+            # motif-count pipeline (04) always uses every read, so a comparison
+            # between the two is only meaningful alongside these columns.
+            "total_read_pairs_in_sample": in_sample,
+            "reads_classified_pct": f"{frac:.2f}",
+            "sampling_strategy": ("all" if args.max_reads == 0
+                                  else args.sampling),
+            "sampling_seed": ("" if args.max_reads == 0 or args.sampling == "head"
+                              else args.seed),
             "alignment_precise_desired_pct": f"{prec_pct:.4f}",
             "VALIDATION_NOTE": "NOT_VALIDATED_exploratory_only",
         }
@@ -536,10 +682,15 @@ def main():
                     "motif_desired_pct": mr["desired_percent_among_motif_hits"],
                     "alignment_desired_pct": srow["alignment_precise_desired_pct"],
                     "motif_informative": mr["informative_reads"],
+                    "motif_total_read_pairs": mr["total_read_pairs"],
+                    "alignment_total_read_pairs": srow["total_read_pairs_in_sample"],
+                    "alignment_reads_classified": srow["total_reads_processed"],
+                    "alignment_sampling": srow["sampling_strategy"],
                     "alignment_wt":      srow["wt"],
                     "alignment_precise": srow["precise_desired"],
                     "alignment_indel":   srow["indel"],
                     "alignment_imprecise": srow["imprecise_PE"],
+                    "alignment_other_allele": srow["other_allele"],
                     "VALIDATION_NOTE":   "alignment_column_NOT_VALIDATED",
                 })
         utils.write_csv(compare,

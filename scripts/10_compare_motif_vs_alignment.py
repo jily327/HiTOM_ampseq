@@ -133,7 +133,15 @@ def main():
             "alignment_precise_desired": ar.get("precise_desired", ""),
             "alignment_indel":         ar.get("indel", ""),
             "alignment_imprecise_PE":  ar.get("imprecise_PE", ""),
+            "alignment_other_allele":  ar.get("other_allele", ""),
+            # Read accounting.  04 counts every read; 07 may classify only a
+            # subset, so the two percentages are not computed over the same
+            # reads unless alignment_reads_classified == motif_total_read_pairs.
+            "motif_total_read_pairs":  mr.get("total_read_pairs", ""),
             "alignment_total_processed": ar.get("total_reads_processed", ""),
+            "alignment_reads_in_sample": ar.get("total_read_pairs_in_sample", ""),
+            "alignment_reads_classified_pct": ar.get("reads_classified_pct", ""),
+            "alignment_sampling":      ar.get("sampling_strategy", ""),
             "VALIDATION_NOTE":         "alignment_column_NOT_VALIDATED",
         }
         compare_rows.append(row)
@@ -146,7 +154,10 @@ def main():
                 "difference_pct", "flagged",
                 "alignment_wt", "alignment_precise_desired",
                 "alignment_indel", "alignment_imprecise_PE",
-                "alignment_total_processed", "VALIDATION_NOTE"]
+                "alignment_other_allele",
+                "motif_total_read_pairs", "alignment_total_processed",
+                "alignment_reads_in_sample", "alignment_reads_classified_pct",
+                "alignment_sampling", "VALIDATION_NOTE"]
     for r in compare_rows:
         for col in ALL_COLS:
             r.setdefault(col, "")
@@ -189,7 +200,10 @@ def main():
             "Discrepancies between motif-based and alignment-based estimates can arise from:",
             "- Reads with desired motif that also carry indels elsewhere in the read",
             "- Reads where alignment identity falls below the threshold, reducing counted reads",
-            "- Differences in read subsampling (--max-reads in 07_alignment_edit_classifier.py)",
+            "- Differences in read subsampling: 04 uses every read while 07 "
+              "classifies at most --max-reads per sample. Compare "
+              "`alignment_reads_classified_pct` against 100% before reading "
+              "a difference as a biological one.",
             "- Alignment using a short motif reference (not full amplicon) — "
               "indels outside the motif window are not detected",
             "",
@@ -198,7 +212,7 @@ def main():
     else:
         report_lines.append("No discrepancies above threshold detected.")
 
-    (out_dir / "discrepancy_report.md").write_text("\n".join(report_lines))
+    (out_dir / "discrepancy_report.md").write_text("\n".join(report_lines), encoding="utf-8")
 
     # Scatter plot (optional)
     if HAS_MPL:

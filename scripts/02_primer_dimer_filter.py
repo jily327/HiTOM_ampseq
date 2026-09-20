@@ -77,7 +77,10 @@ def main():
     meta_rows = utils.read_csv_file(args.metadata)
     sample_ids = {r["sample_id"] for r in meta_rows}
 
-    samples = utils.locate_sample_fastqs(clean_dir, sample_ids=None)
+    # Restrict to samples declared in the metadata.  Passing sample_ids=None
+    # here previously let the undetermined bin through into the QC tables,
+    # contradicting the comment above.
+    samples = utils.locate_sample_fastqs(clean_dir, sample_ids=sample_ids)
 
     qc_rows   = []
     hist_rows = []

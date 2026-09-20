@@ -122,8 +122,18 @@ def main():
                     if has_wt and has_desired:          both_hits    += 1
                     if not has_wt and not has_desired:  neither_hits += 1
 
+            # informative_reads is wt_hits + desired_hits, which counts a read
+            # matching BOTH motifs twice.  This is the formula behind the
+            # validated gold-standard numbers, so it is deliberately left
+            # unchanged; instead any sample where it can bite is reported.
             informative = wt_hits + desired_hits
             desired_pct = (desired_hits / informative * 100) if informative else 0.0
+            if both_hits:
+                print(f"[04_edit] WARNING: {tname} / {sid}: {both_hits} read "
+                      f"pairs match both the WT and the desired motif and are "
+                      f"counted twice in informative_reads ({informative}). "
+                      f"desired_percent_among_motif_hits is inflated for this "
+                      f"row; see both_hits.", file=sys.stderr)
 
             # ---------------------------------------------------------------
             # motif_count_summary.tsv  (gold-standard exact format)
@@ -158,6 +168,7 @@ def main():
                 # --- NOT_VALIDATED stubs ---
                 "indel_reads":                     "NOT_VALIDATED_alignment_required",
                 "imprecise_PE_reads":              "NOT_VALIDATED_alignment_required",
+                "both_motifs_double_counted":      both_hits,
             })
 
     utils.write_tsv(motif_rows, out_dir / "motif_count_summary.tsv")

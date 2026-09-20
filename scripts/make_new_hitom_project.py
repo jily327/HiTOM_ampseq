@@ -92,7 +92,7 @@ def parse_args():
 
 
 def load_protocol(path):
-    with open(path) as f:
+    with open(path, encoding=utils.TEXT_ENCODING) as f:
         return json.load(f)
 
 
@@ -147,7 +147,7 @@ def main():
                 if not k.startswith("_")}
 
     # Load sample sheet
-    with open(args.samples, newline="") as f:
+    with open(args.samples, newline="", encoding=utils.TEXT_ENCODING) as f:
         rows = list(csv.DictReader(f))
 
     sample_ids = validate_sample_sheet(rows, fw_dict, rv_dict)
@@ -200,7 +200,8 @@ def main():
         meta_cols.append("leaf")
     meta_cols  += ["forward_barcode", "reverse_barcode"]
 
-    with open(config_dir / "sample_metadata.csv", "w", newline="") as f:
+    with open(config_dir / "sample_metadata.csv", "w", newline="",
+              encoding=utils.TEXT_ENCODING) as f:
         w = csv.DictWriter(f, fieldnames=meta_cols, extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)
@@ -218,7 +219,8 @@ def main():
             "reverse_barcode_name":  row["reverse_barcode"],
             "reverse_barcode_seq":   rv_seq,
         })
-    with open(config_dir / "barcode_map.csv", "w", newline="") as f:
+    with open(config_dir / "barcode_map.csv", "w", newline="",
+              encoding=utils.TEXT_ENCODING) as f:
         w = csv.DictWriter(f, fieldnames=list(bc_rows[0].keys()))
         w.writeheader()
         w.writerows(bc_rows)
@@ -235,7 +237,7 @@ def main():
         entry["analysis_notes"] = f"Template entry for target {tgt}. Fill in motif sequences."
         targets_json["targets"].append(entry)
 
-    with open(config_dir / "targets.json", "w") as f:
+    with open(config_dir / "targets.json", "w", encoding=utils.TEXT_ENCODING) as f:
         json.dump(targets_json, f, indent=2)
     print(f"[make_project] Wrote config/targets.json template "
           f"({len(unique_targets)} target entries — FILL IN MOTIF SEQUENCES)")
@@ -265,7 +267,7 @@ def main():
         echo "Done. Results in $OUTPUT_DIR"
     """)
     run_script = examples_dir / "run_this_project.sh"
-    run_script.write_text(example_cmd)
+    run_script.write_text(example_cmd, encoding="utf-8")
     run_script.chmod(0o755)
     print(f"[make_project] Wrote examples/run_this_project.sh")
 
@@ -306,7 +308,7 @@ def main():
         {examples_dir}/run_this_project.sh — example run command
     """)
 
-    (proj_dir / "PROJECT_README.md").write_text(report)
+    (proj_dir / "PROJECT_README.md").write_text(report, encoding="utf-8")
     print(f"[make_project] Wrote PROJECT_README.md")
 
     print(f"\n[make_project] ✓ Project ready at {proj_dir}")

@@ -10,16 +10,47 @@ import json
 import sys
 from pathlib import Path
 
+# All pipeline text files (config JSON, metadata CSV, result TSV/CSV) are UTF-8.
+# Passing this explicitly keeps behaviour identical on platforms whose default
+# locale encoding is not UTF-8 (e.g. cp949 on Korean Windows), where config
+# files containing non-ASCII characters would otherwise raise UnicodeDecodeError.
+TEXT_ENCODING = "utf-8"
+
+
+def _configure_console():
+    """
+    Make stdout/stderr able to carry the non-ASCII characters this pipeline
+    prints (arrows, em dashes) on consoles whose default encoding cannot
+    represent them, e.g. cp949 on Korean Windows, where they would otherwise
+    raise UnicodeEncodeError and abort an otherwise successful step.
+
+    Runs on import because argparse prints module docstrings before main().
+    Unknown characters degrade to a replacement character rather than failing.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            if (stream is not None
+                    and hasattr(stream, "reconfigure")
+                    and (stream.encoding or "").lower().replace("-", "")
+                    not in ("utf8", "utf8mb4")):
+                stream.reconfigure(encoding=TEXT_ENCODING, errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass   # non-reconfigurable stream (pipe, pytest capture) — leave as is
+
+
+_configure_console()
+
 # ---------------------------------------------------------------------------
 # FASTQ I/O
 # ---------------------------------------------------------------------------
 
 def open_gz(path, mode="rt"):
-    """Open a gzip-compressed or plain-text file."""
+    """Open a gzip-compressed or plain-text file (UTF-8 in text mode)."""
     path = str(path)
+    enc = TEXT_ENCODING if "b" not in mode else None
     if path.endswith(".gz"):
-        return gzip.open(path, mode)
-    return open(path, mode)
+        return gzip.open(path, mode, encoding=enc)
+    return open(path, mode, encoding=enc)
 
 
 def fastq_iter(handle):
@@ -38,6 +69,35 @@ def fastq_iter(handle):
         if not q:
             raise ValueError("Truncated FASTQ record (incomplete final record)")
         yield (h.rstrip("\n"), s.rstrip("\n"), p.rstrip("\n"), q.rstrip("\n"))
+
+
+def fastq_pair_iter(handle1, handle2, label=""):
+    """
+    Yield ((h1, s1, p1, q1), (h2, s2, p2, q2)) tuples from two open FASTQ
+    handles that are expected to hold the same number of records.
+
+    zip() would silently stop at the shorter file and drop the remaining
+    reads, so the record counts are compared explicitly and a ValueError is
+    raised if R1 and R2 are out of step.  `label` is included in the message.
+    """
+    it1 = fastq_iter(handle1)
+    it2 = fastq_iter(handle2)
+    n = 0
+    while True:
+        rec1 = next(it1, None)
+        rec2 = next(it2, None)
+        if rec1 is None and rec2 is None:
+            return
+        if rec1 is None or rec2 is None:
+            longer = "R2" if rec1 is None else "R1"
+            where  = f" ({label})" if label else ""
+            raise ValueError(
+                f"R1/R2 read counts differ{where}: {longer} has more than "
+                f"{n} records while the other file ended. "
+                f"The FASTQ pair is not synchronised; check the input files."
+            )
+        n += 1
+        yield rec1, rec2
 
 
 def count_fastq_reads(path):
@@ -113,7 +173,7 @@ def search_motif_in_readpair(s1, s2, motif, max_mismatches=0):
 
 def load_json(path):
     """Load and return parsed JSON from a file path."""
-    with open(path) as fh:
+    with open(path, encoding=TEXT_ENCODING) as fh:
         return json.load(fh)
 
 
@@ -223,7 +283,7 @@ def load_metadata(path, fw_dict, rv_dict):
     barcode_lookup: {(fw_seq, rv_seq): sample_id}
     """
     rows = []
-    with open(path, newline="") as fh:
+    with open(path, newline="", encoding=TEXT_ENCODING) as fh:
         for row in csv.DictReader(fh):
             rows.append(row)
 
@@ -293,28 +353,43 @@ def locate_sample_fastqs(demux_clean_dir, sample_ids=None):
 # ---------------------------------------------------------------------------
 
 def write_csv(rows, path, fieldnames=None):
-    """Write a list-of-dicts to a CSV file.  Creates parent dirs as needed."""
-    if not rows:
-        return
+    """
+    Write a list-of-dicts to a CSV file.  Creates parent dirs as needed.
+
+    With no rows and no fieldnames there is nothing to write; a warning is
+    printed so that a missing output file is never silent (an empty result
+    is otherwise indistinguishable from a step that did not run).
+    """
     path = Path(path)
+    if not rows and fieldnames is None:
+        print(f"[utils] WARNING: no rows to write, {path} not created",
+              file=sys.stderr)
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     if fieldnames is None:
         fieldnames = list(rows[0].keys())
-    with open(path, "w", newline="") as fh:
+    with open(path, "w", newline="", encoding=TEXT_ENCODING) as fh:
         w = csv.DictWriter(fh, fieldnames=fieldnames)
         w.writeheader()
         w.writerows(rows)
 
 
 def write_tsv(rows, path, fieldnames=None):
-    """Write a list-of-dicts to a TSV file.  Creates parent dirs as needed."""
-    if not rows:
-        return
+    """
+    Write a list-of-dicts to a TSV file.  Creates parent dirs as needed.
+
+    With no rows and no fieldnames there is nothing to write; a warning is
+    printed so that a missing output file is never silent.
+    """
     path = Path(path)
+    if not rows and fieldnames is None:
+        print(f"[utils] WARNING: no rows to write, {path} not created",
+              file=sys.stderr)
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     if fieldnames is None:
         fieldnames = list(rows[0].keys())
-    with open(path, "w", newline="") as fh:
+    with open(path, "w", newline="", encoding=TEXT_ENCODING) as fh:
         # lineterminator="\n" produces Unix LF endings (not CRLF default from RFC 4180)
         w = csv.DictWriter(fh, fieldnames=fieldnames, delimiter="\t",
                            lineterminator="\n")
@@ -324,11 +399,11 @@ def write_tsv(rows, path, fieldnames=None):
 
 def read_tsv(path):
     """Read a TSV file and return a list of dicts."""
-    with open(path, newline="") as fh:
+    with open(path, newline="", encoding=TEXT_ENCODING) as fh:
         return list(csv.DictReader(fh, delimiter="\t"))
 
 
 def read_csv_file(path):
     """Read a CSV file and return a list of dicts."""
-    with open(path, newline="") as fh:
+    with open(path, newline="", encoding=TEXT_ENCODING) as fh:
         return list(csv.DictReader(fh))

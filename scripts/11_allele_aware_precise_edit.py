@@ -138,8 +138,14 @@ def analyze_read(s1: str, s2: str,
 
     # ── Step 3: assign allele from scores ────────────────────────────────
     sorted_alleles = sorted(allele_scores, key=allele_scores.get, reverse=True)
-    best, second   = sorted_alleles[0], sorted_alleles[1]
-    margin         = allele_scores[best] - allele_scores[second]
+    if not sorted_alleles:
+        return _low_info_result("no_alleles_configured")
+    best = sorted_alleles[0]
+    # A config with a single allele has no runner-up to compare against; the
+    # margin is then the winner's own score (indexing [1] raised IndexError).
+    second = sorted_alleles[1] if len(sorted_alleles) > 1 else None
+    margin = (allele_scores[best] - allele_scores[second]
+              if second is not None else allele_scores[best])
 
     if allele_scores[best] == 0:
         assigned_allele = "ambiguous"

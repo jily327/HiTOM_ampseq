@@ -35,6 +35,14 @@ For figures, first install dependencies:
 pip install matplotlib pandas numpy
 ```
 
+`run_all.sh` picks an interpreter by running each candidate, so a shim that
+is on `PATH` but does not work (such as the Microsoft Store `python3` stub on
+Windows) is skipped. Set `PYTHON=/path/to/python` to choose one yourself.
+
+Steps 01 to 05 and 07 to 11 need only the Python standard library. Steps 06
+and the scatter plot in step 10 need matplotlib, pandas and numpy; without
+them those steps are skipped and the rest of the pipeline still completes.
+
 ---
 
 ## Input files
@@ -191,7 +199,22 @@ The following outputs are validated against the gold-standard
 - `04_edit/motif_count_summary.tsv` — must match exactly (to 4 decimal places)
 - `01_demux/demux_counts.tsv` — read counts per sample
 
-The smoke test (`tests/smoke_test.sh`) verifies these automatically.
+The smoke test (`tests/smoke_test.sh`) verifies these automatically. It needs the
+real run in `~/projects/alsw/00_fastq`.
+
+### Running without the sequencing data
+
+`tests/smoke_test_synthetic.sh` needs no external files. It generates a small
+multiplexed FASTQ pair of known composition, runs the whole pipeline including
+the optional modules, and checks the numbers that input must produce:
+
+```bash
+bash pipeline/tests/smoke_test_synthetic.sh
+```
+
+Use it to check that the code works on a new machine or after a change. It
+does not reproduce the gold standard; only `tests/smoke_test.sh` against the
+real FASTQs does that.
 
 ---
 
@@ -334,6 +357,13 @@ bash pipeline/run_all.sh \
 
 **Validation status: NOT VALIDATED.**
 Treat alignment outputs as exploratory until confirmed against controls.
+
+By default step 07 classifies at most 3000 read pairs per sample and target,
+drawn at random from the whole file (`--sampling random --seed 0`), while step
+04 always uses every read. Each summary row records how many reads the sample
+holds and how many were classified, so the two methods can be compared
+honestly. Reads belonging to the other homeolog of an allele-specific target
+are reported as `other_allele` rather than as an editing outcome.
 
 Key limitation: full amplicon reference sequences are not currently provided
 in `targets.json` (`reference_amplicon_sequence: null`). Alignment uses the
